@@ -21,20 +21,6 @@
 			</div>
 
 			<!-- Collect the nav links, forms, and other content for toggling -->
-			<div class="collapse navbar-collapse navbar-ex1-collapse">
-				{% if session['username'] %}
-				<ul class="nav navbar-nav">
-						<li class="{{ 'active' if active_page == 'plan' else '' }}"><a href="/plan">Plan</a></li>
-						{% if session['username'] in ['dpatil','bdas','kahire'] %}
-							<li class="{{ 'active' if active_page == 'compoff' else '' }}"><a href="/compoff">Compoff</a></li>
-						{% endif %}
-						<li class="{{ 'active' if active_page == 'cancel' else '' }}"><a href="/cancel">Cancel</a></li>
-				</ul>
-				<ul class="nav navbar-nav navbar-right">
-					<li><a href="/logout">Logout</a></li>
-				</ul>
-				{% endif %}
-			</div><!-- /.navbar-collapse -->
 		</div>
 	</nav>
 </div>

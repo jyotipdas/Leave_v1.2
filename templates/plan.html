@@ -42,9 +42,14 @@
 				<textarea style="resize:none;" class="form-control" rows="3" placeholder="Reason for leave."
                           maxlength="300" value="{{ request.form.reason }}" required></textarea>
 		</div>
-        <input type="radio" value="{{ request.form.compoff }}" > Comp-off<br><br>
+        <input type="radio" value="{{ request.form.compoff }}" name="compoff" > Comp-off<br><br>
         <p style="color:red;">Please make sure to apple only 1 day for compoff.</p>
-
+		{% if error %}
+			<p class="error" style="color:red;"><strong>Error:</strong> {{ error }}
+		{% endif %}
+        {% if message %}
+			<p class="error" style="color:green;"><strong>Message:</strong> {{ message }}
+		{% endif %}
 		<button type="submit" class="btn btn-primary btn-lg">Submit</button>
             </div>
         </div>

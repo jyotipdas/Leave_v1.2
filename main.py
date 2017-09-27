@@ -101,6 +101,26 @@ def welcome():
 @app.route('/plan/', methods=['GET','POST'])
 @login_required
 def plan():
+    usr = Users.query.filter_by(id=session['user_id']).first()
+    el = usr.balance
+    comp = usr.compoff
+    if request.method == 'POST':
+        if request.form['sdate'] > request.form['edate']:
+            return render_template('plan.html', error='Start date is greater than End date')
+    sdate = datetime.datetime.strptime(str(request.form['sdate']), '%Y-%m-%d')
+    edate = datetime.datetime.strptime(str(request.form['edate']), '%Y-%m-%d')
+    days = int(request.form['days'])
+    ctime = datetime.datetime.now()
+    reason = request.form['reason']
+    if request.form['compoff'] and (sdate == edate) and session['name'] in ['dpatil','bdas','kahire']:
+        usr.compoff = comp - 1
+        compoff_apply = Leavedetail(sdate=sdate,edate=edate,a_time=ctime,reason=reason,active=True,compoff=True)
+        db.session.add(compoff_apply)
+        db.session.commit()
+        request.form.clear()
+        return render_template('plan.html',message='You have applied for compoff date:{}'.format(sdate))
+    elif int(days) <= el :
+        pass
     return render_template('plan.html')
 
 @app.route('/compoff/',methods=['GET','POST'])
