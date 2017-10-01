@@ -105,28 +105,51 @@ def plan():
     el = usr.balance
     comp = usr.compoff
     if request.method == 'POST':
-        if request.form['sdate'] > request.form['edate']:
-            return render_template('plan.html', error='Start date is greater than End date')
-    sdate = datetime.datetime.strptime(str(request.form['sdate']), '%Y-%m-%d')
-    edate = datetime.datetime.strptime(str(request.form['edate']), '%Y-%m-%d')
-    days = int(request.form['days'])
-    ctime = datetime.datetime.now()
-    reason = request.form['reason']
-    if request.form['compoff'] and (sdate == edate) and session['name'] in ['dpatil','bdas','kahire']:
-        usr.compoff = comp - 1
-        compoff_apply = Leavedetail(sdate=sdate,edate=edate,a_time=ctime,reason=reason,active=True,compoff=True)
-        db.session.add(compoff_apply)
-        db.session.commit()
-        request.form.clear()
-        return render_template('plan.html',message='You have applied for compoff date:{}'.format(sdate))
-    elif int(days) <= el :
-        pass
-    return render_template('plan.html')
+        sdate = datetime.datetime.strptime(str(request.form['sdate']), '%Y-%m-%d')
+        edate = datetime.datetime.strptime(str(request.form['edate']), '%Y-%m-%d')
+        days = int(request.form['days'])
+        ctime = datetime.datetime.now()
+        reason = request.form['reason']
+        leave_type = request.form.get('type')
+        print leave_type
+        if sdate > edate:
+            return render_template('plan.html',error='Start date is bigger than End date..')
+
+        if leave_type == 'leave':
+            if usr.balance > 0 and days <= usr.balance:
+                leave_apply = Leavedetail(sdate=sdate,edate=edate,a_time=ctime,days=days,reason=reason,active=True,compoff=False,usr_id=session['user_id'])
+                if leave_apply:
+                    usr.balance = usr.balance - days
+                    db.session.add(leave_apply)
+                    db.session.commit()
+                    request.firm = {}
+                    return render_template('plan.html',message='You have applied for leave from {} to {}'.format(sdate,edate))
+            else:
+                 return render_template('plan.html',error='You do not have much to apply for')
+
+        else:
+            if sdate == edate:
+                if usr.compoff > 0:
+                    comp_apply = Leavedetail(sdate=sdate,edate=edate,a_time=ctime,days=days,reason=reason,active=True,compoff=True,usr_id=session['user_id'])
+                    if comp_apply:
+                        usr.compoff = comp - 1
+                        db.session.add(comp_apply)
+                        db.session.commit()
+                        request.form = {}
+                        return render_template('plan.html',message='You have redeemed a compoff')
+                    else:
+                        return render_template('plan.html',error='Facing some issue,Try after some time!')
+                else:
+                    return  render_template('plan.html',error='You dont have balance to apply for compoff...')
+            else:
+                return render_template('plan.html',error='Compoff can apply for a single day only!!!')
+
+    return render_template('plan.html',message='You have {} nos of leave and {} nos of compoff.'.format(usr.balance,usr.compoff))
 
 @app.route('/compoff/',methods=['GET','POST'])
 @login_required
 def compoff():
-    compoff_all = Compoff.query.filter_by(id=current_user.get_id()).all()
+    compoff_all = Compoff.query.filter_by(user_id=current_user.get_id()).all()
     if request.method == 'POST':
         if request.form['compoff']:
             print request.form['compoff']
@@ -147,7 +170,6 @@ def compoff():
 
 @app.route('/logout/')
 @login_required
-@login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
@@ -155,7 +177,17 @@ def logout():
 @app.route('/cancel/',methods=['GET','POST'])
 @login_required
 def cancel():
-    return render_template('cancel.html')
+    leaves = Leavedetail.query.filter_by(usr_id=session['user_id']).all()
+    for leave in leaves:
+        print leave.sdate
+
+    return render_template('cancel.html',list=leaves)
+
+@app.route('/cancel/<string:input>')
+@login_required
+def cancelling(input):
+    print input
+    return redirect('cancel')
 
 @app.errorhandler(404)
 def page_not_found(e):

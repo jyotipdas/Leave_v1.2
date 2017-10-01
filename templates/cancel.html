@@ -10,24 +10,17 @@
 	</div>
 	</div>
 </div>
-<!--    <div class="container">
+<div class="container">
         <ul class="list-group">
             <li class="list-group-item">From Date => To Date => Reason</li>
-        {% if list %}
-              <li class="list-group-item">{{'{} => {} =>
-                  {}'.format(list[1].split()[0],list[2].split()[0],list[3])}}
-                  <a href="/cancel/{{ list[1].split()[0] }}={{ list[2].split()[0] }}" class="icon"><span
-                          style='float:right'
-                                                                      class="glyphicon glyphicon-remove"
-                                               aria-hidden="true">
-
-                  </span></a></li>
-          {% elif message %}
-            <li><a style="color:blue;">{{ message }}</a></li>
-          {% else %}
-            <li><a style="color:red;">{{ error }}</a></li>
-        {% endif %}
+        {% for d in list %}
+			<li class="list-group-item">{{ d.sdate }} => {{ d.edate }} => {{ d.reason }}
+			<a href="/cancel/{{d.sdate}}={{d.edate}}={{d.usr_id}}" class="icon">
+				<span style='float:right' class="glyphicon glyphicon-remove" aria-hidden="true"></span>
+			</a>
+			</li>
+		{% endfor %}
         </ul>
-        </div>!-->
+        </div>
 
 {% endblock %}
