@@ -1,12 +1,11 @@
 #!/usr/bin/python2.7
-from flask import Flask, render_template,request, url_for, redirect, session
+from flask import Flask, render_template,request, url_for, redirect, session,g
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField
 from wtforms.validators import InputRequired, Length
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import  check_password_hash
 from flask_login import LoginManager, login_required, login_user,UserMixin, logout_user,current_user
-from sqlalchemy import text
 import atexit
 from apscheduler.scheduler import Scheduler
 import datetime
@@ -71,6 +70,12 @@ class LoginForm(FlaskForm):
     recaptcha = RecaptchaField()
 
 
+@app.before_request
+def before_request():
+    session.permanent = True
+    app.permanent_session_lifetime = datetime.timedelta(minutes=15)
+    session.modified = True
+    g.user = current_user
 
 @app.route('/')
 @app.route('/login/', methods=['GET','POST'])
@@ -80,7 +85,7 @@ def login():
         db_usr = Users.query.filter_by(username=form.username.data).first()
         if db_usr:
             if check_password_hash(db_usr.password, form.password.data):
-                login_user(db_usr, remember=True)
+                login_user(db_usr, remember=False)
                 session['username'] = form.username.data
                 session['login_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 session['user_id'] = current_user.get_id()
@@ -111,7 +116,6 @@ def plan():
         ctime = datetime.datetime.now()
         reason = request.form['reason']
         leave_type = request.form.get('type')
-        print leave_type
         if sdate > edate:
             return render_template('plan.html',error='Start date is bigger than End date..')
 
@@ -152,7 +156,6 @@ def compoff():
     compoff_all = Compoff.query.filter_by(user_id=current_user.get_id()).all()
     if request.method == 'POST':
         if request.form['compoff']:
-            print request.form['compoff']
             worked_date = datetime.datetime.strptime(str(request.form['compoff']),'%Y-%m-%d')
             log_time = datetime.datetime.now()
             user_id = int(current_user.get_id())
@@ -171,27 +174,60 @@ def compoff():
 @app.route('/logout/')
 @login_required
 def logout():
+    session.pop('username', None)
+    session.pop('login_time',None)
+    session.pop('user_id',None)
     logout_user()
     return redirect(url_for('login'))
 
 @app.route('/cancel/',methods=['GET','POST'])
 @login_required
 def cancel():
-    leaves = Leavedetail.query.filter_by(usr_id=session['user_id']).all()
-    for leave in leaves:
-        print leave.sdate
-
-    return render_template('cancel.html',list=leaves)
+    leaves = Leavedetail.query.filter_by(usr_id=session['user_id'],active=True).all()
+    today = datetime.datetime.today().strftime('%Y-%m-%d')
+    for d in xrange(len(leaves)):
+        if leaves[d].sdate.strftime('%Y-%m-%d') >= today:
+            return render_template('cancel.html',list=leaves[d])
+    else:
+        return render_template('cancel.html',message='You dont have leaves to cancel...')
 
 @app.route('/cancel/<string:input>')
 @login_required
 def cancelling(input):
-    print input
+    sdate,edate,id,days = input.split('=')
+    sdate = datetime.datetime.strptime(sdate,'%Y-%m-%d %H:%S:%M')
+    edate = datetime.datetime.strptime(edate,'%Y-%m-%d %H:%S:%M')
+    leaves = Leavedetail.query.filter_by(usr_id=int(id),sdate=sdate ,edate=edate).first()
+    users = Users.query.filter_by(id=id).first()
+    if leaves.compoff:
+            leaves.active = False
+            leaves.compoff = False
+            users.compoff = users.compoff + 1
+            db.session.commit()
+    else:
+            days = int(days)
+            new_balance = users.balance + days
+            leaves.active = False
+            users.balance = new_balance
+            db.session.commit()
+
     return redirect('cancel')
 
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html',error=e)
+
+#@cron.cron_schedule(minute=2)
+def add_leave():
+    for usr in Users.query.all():
+        usr.balance = usr.balance + 2
+
+    db.session.commit()
+
+
+cron.add_cron_job(add_leave,hour='0',minute='0', day='*',month='*')
+
+atexit.register(lambda: cron.shutdown(wait=False))
 
 if __name__ == '__main__':
     app.run(debug=True)
