@@ -8,17 +8,23 @@ from werkzeug.security import  check_password_hash
 from flask_login import LoginManager, login_required, login_user,UserMixin, logout_user,current_user
 import atexit
 from apscheduler.scheduler import Scheduler
-import datetime
+import datetime,logging
+
 
 app = Flask(__name__)
 cron = Scheduler(daemon=True)
 cron.start()
+
 
 app.config['SECRET_KEY'] = ';Y8m4e#PUP\qQR]+"`ZAM(&td{8utWN?CtHXg6X(-z!$XP4?(t)~g4Kk9xgr8}ZaH]eGx(:uvNE}GVp;'
 app.config['RECAPTCHA_PUBLIC_KEY'] = '6LePzS8UAAAAADoA_QPfGVUArvWnA0oF9eZi7-L7'
 app.config['RECAPTCHA_PRIVATE_KEY'] = '6Lf3yS8UAAAAAExePlZihuoFhiZIcZOKWskui3sd'
 app.config['TESTING'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///leave.db"
+log_date= datetime.datetime.today().strftime('%m%d%Y')
+filename = log_date + '_leavetracker.log'
+logging.basicConfig(filename=filename,level=logging.DEBUG,format='%(asctime)s-%(levelname)s-%(funcName)s-%(message)s',
+                    datefmt='%Y/%m/%d %H:%M:%S')
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -89,8 +95,10 @@ def login():
                 session['username'] = form.username.data
                 session['login_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 session['user_id'] = current_user.get_id()
+                logging.info('User logged in')
                 return render_template('welcome.html', name=user_name[session['username']])
             else:
+                logging.warning('User provided wrong password')
                 return render_template('login.html', form=form, error='Password is not matching...')
         else:
             return render_template('login.html',form=form, error='Check your username.')
@@ -117,6 +125,7 @@ def plan():
         reason = request.form['reason']
         leave_type = request.form.get('type')
         if sdate > edate:
+            logging.error('User {} provided a wrong date range'.format(session['username']))
             return render_template('plan.html',error='Start date is bigger than End date..')
 
         if leave_type == 'leave':
@@ -126,7 +135,8 @@ def plan():
                     usr.balance = usr.balance - days
                     db.session.add(leave_apply)
                     db.session.commit()
-                    request.firm = {}
+                    request.form = {}
+                    logging.info('User {} successfully applied for a leave'.format(session['username']))
                     return render_template('plan.html',message='You have applied for leave from {} to {}'.format(sdate,edate))
             else:
                  return render_template('plan.html',error='You do not have much to apply for')
@@ -140,12 +150,14 @@ def plan():
                         db.session.add(comp_apply)
                         db.session.commit()
                         request.form = {}
+                        logging.info('User {} applied for a compoff redeemtion'.format(session['username']))
                         return render_template('plan.html',message='You have redeemed a compoff')
                     else:
                         return render_template('plan.html',error='Facing some issue,Try after some time!')
                 else:
                     return  render_template('plan.html',error='You dont have balance to apply for compoff...')
             else:
+                logging.warning('User {} trying to apply compoff for more than 1 day'.format(session['username']))
                 return render_template('plan.html',error='Compoff can apply for a single day only!!!')
 
     return render_template('plan.html',message='You have {} nos of leave and {} nos of compoff.'.format(usr.balance,usr.compoff))
@@ -153,7 +165,6 @@ def plan():
 @app.route('/compoff/',methods=['GET','POST'])
 @login_required
 def compoff():
-    compoff_all = Compoff.query.filter_by(user_id=current_user.get_id()).all()
     if request.method == 'POST':
         if request.form['compoff']:
             worked_date = datetime.datetime.strptime(str(request.form['compoff']),'%Y-%m-%d')
@@ -166,6 +177,7 @@ def compoff():
                 user_compoff.compoff = user_compoff.compoff + 1
                 db.session.commit()
                 request.form = {}
+                logging.info('User {} added a new compoff'.format(session['username']))
                 return render_template('compoff.html',message='Added {} as compoff :)'.format(str(worked_date).split()[
                     0]))
 
@@ -174,10 +186,8 @@ def compoff():
 @app.route('/logout/')
 @login_required
 def logout():
-    session.pop('username', None)
-    session.pop('login_time',None)
-    session.pop('user_id',None)
     logout_user()
+    logging.info('User {} logged out'.format(session['username']))
     return redirect(url_for('login'))
 
 @app.route('/cancel/',methods=['GET','POST'])
@@ -210,24 +220,23 @@ def cancelling(input):
             leaves.active = False
             users.balance = new_balance
             db.session.commit()
-
+    logging.info('User {} cancelled a leave from the planed leaves'.format(session['username']))
     return redirect('cancel')
 
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html',error=e)
 
-#@cron.cron_schedule(minute=2)
 def add_leave():
     for usr in Users.query.all():
         usr.balance = usr.balance + 2
 
     db.session.commit()
+    logging.info('2 leaved added to everyone automatically')
 
-
-cron.add_cron_job(add_leave,hour='0',minute='0', day='*',month='*')
+cron.add_cron_job(add_leave,hour='0',minute='0', day='1',month='*')
 
 atexit.register(lambda: cron.shutdown(wait=False))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
