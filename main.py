@@ -264,7 +264,6 @@ def token_required(f):
 
     return decorated
 
-
 @app.route('/api/user/<public_key>',methods=['GET'])
 @token_required
 def get_user_detail(c_user,public_key):
