@@ -1,5 +1,5 @@
 #!/usr/bin/python2.7
-from flask import Flask, render_template,request, url_for, redirect, session,g
+from flask import Flask, render_template,request, url_for, redirect, session,g, jsonify
 from flask_wtf import FlaskForm, RecaptchaField
 from wtforms import StringField, PasswordField
 from wtforms.validators import InputRequired, Length
@@ -9,7 +9,7 @@ from flask_login import LoginManager, login_required, login_user,UserMixin, logo
 import atexit
 from apscheduler.scheduler import Scheduler
 import datetime,logging
-
+from functools import wraps
 
 app = Flask(__name__)
 cron = Scheduler(daemon=True)
@@ -40,8 +40,10 @@ class Users(UserMixin,db.Model):
     password = db.Column(db.String(80), nullable=False)
     balance = db.Column(db.Integer,nullable=False,default=0)
     compoff = db.Column(db.Integer,nullable=False,default=0)
-    leaves = db.relationship('Leavedetail', backref='user', lazy='dynamic')
-    compoffs = db.relationship('Compoff', backref='user', lazy='dynamic')
+    public_key = db.Column(db.String(150),nullable=False)
+    token = db.Column(db.String(300),nullable=False)
+    leaves = db.relationship('Leavedetail', backref='users', lazy='dynamic')
+    compoffs = db.relationship('Compoff', backref='users', lazy='dynamic')
 
 
 @login_manager.user_loader
@@ -68,6 +70,7 @@ class Compoff(db.Model):
     worked_date = db.Column(db.DateTime,nullable=False)
     logged_date = db.Column(db.DateTime,nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
 
 
 class LoginForm(FlaskForm):
@@ -237,6 +240,64 @@ def add_leave():
 cron.add_cron_job(add_leave,hour='0',minute='0', day='1',month='*')
 
 atexit.register(lambda: cron.shutdown(wait=False))
+
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args,**kwargs):
+        token = None
+
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+
+        if not token:
+            return  jsonify({'message':'Token is not provided'})
+
+        try:
+            import jwt
+            data = jwt.decode(token,app.config['SECRET_KEY'])
+            c_user = Users.query.filter_by(public_key=data['public_key'])
+        except:
+            return jsonify({'message':'Token is invalid'}), 401
+
+        return f(c_user,*args,**kwargs)
+
+    return decorated
+
+
+@app.route('/api/user/<public_key>',methods=['GET'])
+@token_required
+def get_user_detail(c_user,public_key):
+    data = Users.query.filter_by(public_key=public_key).first()
+    if not data:
+        return jsonify({'message':'No user found'})
+    user_data = {}
+    user_data['username'] = data.username
+    user_data['password'] = data.password
+    user_data['leave_balance'] = data.balance
+    user_data['compoff'] = data.compoff
+    user_data['public_key'] = data.public_key
+    user_data['token'] = data.token
+
+    return jsonify({"User's Detail": user_data})
+
+@app.route('/api/leave',methods=['GET'])
+def get_user_leave():
+    return ''
+
+@app.route('/api/leave',methods=['POST'])
+def cancel_leave():
+    return ''
+
+@app.route('/api/leave',methods=['DELETE'])
+def user_leaves():
+    return ''
+
+@app.route('/api/compoff',methods=['GET'])
+def user_compoffs():
+    return ''
+
+
 
 if __name__ == '__main__':
     app.run()
