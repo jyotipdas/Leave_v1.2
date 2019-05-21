@@ -22,7 +22,7 @@ app.config['RECAPTCHA_PRIVATE_KEY'] = '6Lf3yS8UAAAAAExePlZihuoFhiZIcZOKWskui3sd'
 app.config['TESTING'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///leave.db"
 log_date= datetime.datetime.today().strftime('%m%d%Y')
-filename = log_date + '_leavetracker.log'
+filename = 'leavetracker.log'
 logging.basicConfig(filename=filename,level=logging.DEBUG,format='%(asctime)s-%(levelname)s-%(funcName)s-%(message)s',
                     datefmt='%Y/%m/%d %H:%M:%S')
 db = SQLAlchemy(app)
@@ -95,10 +95,10 @@ def login():
                 session['username'] = form.username.data
                 session['login_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 session['user_id'] = current_user.get_id()
-                logging.info('User logged in')
+                logging.info('User {} logged in'.format(form.username.data))
                 return render_template('welcome.html', name=user_name[session['username']])
             else:
-                logging.warning('User provided wrong password')
+                logging.error('User {} provided wrong password'.format(form.username.data))
                 return render_template('login.html', form=form, error='Password is not matching...')
         else:
             return render_template('login.html',form=form, error='Check your username.')
@@ -228,15 +228,17 @@ def page_not_found(e):
     return render_template('404.html',error=e)
 
 def add_leave():
-    for usr in Users.query.all():
-        usr.balance = usr.balance + 2
+    for user in Users.query.all():
+        user.balance += 2
 
     db.session.commit()
     logging.info('2 leaved added to everyone automatically')
 
-cron.add_cron_job(add_leave,hour='0',minute='0', day='1',month='*')
+cron.add_cron_job(add_leave,hour='*/4',minute='00', day='*',month='*')
 
 atexit.register(lambda: cron.shutdown(wait=False))
+
+
 
 if __name__ == '__main__':
     app.run()
